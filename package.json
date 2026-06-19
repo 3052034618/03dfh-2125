@@ -7,12 +7,13 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "dev:electron": "concurrently \"npm run dev\" \"wait-on http://localhost:5175 && cross-env NODE_ENV=development electron .\"",
+    "dev:electron": "node scripts/dev-electron.cjs",
     "build": "tsc -b && vite build",
     "build:electron": "npm run build && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "npm run dev:electron"
+    "start": "node scripts/dev-electron.cjs",
+    "electron:check": "npx electron --version"
   },
   "dependencies": {
     "dayjs": "^1.11.21",
