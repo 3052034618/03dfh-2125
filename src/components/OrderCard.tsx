@@ -1,4 +1,4 @@
-import { Clock, Users, MapPin, Wallet, AlertTriangle, CheckCircle, Car, Map } from 'lucide-react';
+import { Clock, Users, MapPin, Wallet, AlertTriangle, CheckCircle, Map } from 'lucide-react';
 import dayjs from 'dayjs';
 import type { Order } from '../types';
 

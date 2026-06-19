@@ -1,18 +1,40 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { Package, Clock, CheckCircle, DollarSign } from 'lucide-react';
 import FilterBar from './components/FilterBar';
 import OrderCard from './components/OrderCard';
 import OrderDetail from './components/OrderDetail';
 import { mockOrders, mockDriver } from './data/mockData';
+import {
+  loadOrders,
+  saveOrders,
+} from './utils/storage';
 import type { Order, FilterType, DayTab, VehicleType, ServiceRemark } from './types';
 import './App.css';
 
 function App() {
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [activeDay, setActiveDay] = useState<DayTab>('today');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    const saved = loadOrders();
+    if (saved && saved.length > 0) {
+      setOrders(saved);
+    } else {
+      setOrders(mockOrders);
+      saveOrders(mockOrders);
+    }
+    setIsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded && orders.length > 0) {
+      saveOrders(orders);
+    }
+  }, [orders, isLoaded]);
 
   const filteredOrders = useMemo(() => {
     let result = orders.filter(order => {
@@ -64,31 +86,31 @@ function App() {
       arrivalTime: string;
     }
   ) => {
-    setOrders(prev =>
-      prev.map(order =>
-        order.id === orderId
-          ? {
-              ...order,
-              status: 'quoted',
-              myQuote: {
-                driverId: mockDriver.id,
-                driverName: mockDriver.name,
-                vehicleType: data.vehicleType,
-                capacity: data.capacity,
-                price: data.price,
-                arrivalTime: data.arrivalTime,
-                quotedAt: dayjs().format('YYYY-MM-DD HH:mm'),
-              },
-            }
-          : order
-      )
+    const updatedOrders = orders.map(order =>
+      order.id === orderId
+        ? {
+            ...order,
+            status: 'quoted' as const,
+            myQuote: {
+              driverId: mockDriver.id,
+              driverName: mockDriver.name,
+              vehicleType: data.vehicleType,
+              capacity: data.capacity,
+              price: data.price,
+              arrivalTime: data.arrivalTime,
+              quotedAt: dayjs().format('YYYY-MM-DD HH:mm'),
+            },
+          }
+        : order
     );
+    
+    setOrders(updatedOrders);
     
     setSelectedOrder(prev =>
       prev && prev.id === orderId
         ? {
             ...prev,
-            status: 'quoted',
+            status: 'quoted' as const,
             myQuote: {
               driverId: mockDriver.id,
               driverName: mockDriver.name,
@@ -112,26 +134,26 @@ function App() {
       note: string;
     }
   ) => {
-    setOrders(prev =>
-      prev.map(order =>
-        order.id === orderId
-          ? {
-              ...order,
-              status: 'completed',
-              actualStartTime: data.actualStartTime,
-              actualEndTime: data.actualEndTime,
-              serviceRemarks: data.remarks,
-              serviceNote: data.note,
-            }
-          : order
-      )
+    const updatedOrders = orders.map(order =>
+      order.id === orderId
+        ? {
+            ...order,
+            status: 'completed' as const,
+            actualStartTime: data.actualStartTime,
+            actualEndTime: data.actualEndTime,
+            serviceRemarks: data.remarks,
+            serviceNote: data.note,
+          }
+        : order
     );
+    
+    setOrders(updatedOrders);
     
     setSelectedOrder(prev =>
       prev && prev.id === orderId
         ? {
             ...prev,
-            status: 'completed',
+            status: 'completed' as const,
             actualStartTime: data.actualStartTime,
             actualEndTime: data.actualEndTime,
             serviceRemarks: data.remarks,
@@ -146,12 +168,19 @@ function App() {
       dayjs(o.expectedEndTime).isSame(dayjs(), 'day')
     );
     const pending = todayOrders.filter(o => o.status === 'pending').length;
-    const quoted = todayOrders.filter(o => o.status === 'quoted').length;
     const completed = todayOrders.filter(o => o.status === 'completed').length;
     const totalBudget = todayOrders.reduce((sum, o) => sum + o.budget, 0);
     
-    return { pending, quoted, completed, totalBudget, total: todayOrders.length };
+    return { pending, completed, totalBudget, total: todayOrders.length };
   }, [orders]);
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">加载中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

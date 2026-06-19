@@ -3,8 +3,6 @@ import {
   X,
   Clock,
   Users,
-  MapPin,
-  Wallet,
   AlertTriangle,
   Phone,
   Map,
@@ -12,8 +10,8 @@ import {
   Calendar,
   MessageSquare,
   CheckCircle,
-  Star,
   Navigation,
+  AlertCircle,
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import type { Order, VehicleType, ServiceRemark } from '../types';
@@ -59,19 +57,21 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [showCompleteForm, setShowCompleteForm] = useState(false);
   const [vehicleType, setVehicleType] = useState<VehicleType>('7座MPV');
-  const [capacity, setCapacity] = useState(7);
-  const [price, setPrice] = useState(order.budget);
-  const [arrivalTime, setArrivalTime] = useState(
+  const [capacity, setCapacity] = useState<number>(7);
+  const [price, setPrice] = useState<number>(order.budget);
+  const [arrivalTime, setArrivalTime] = useState<string>(
     dayjs(order.expectedEndTime).subtract(15, 'minute').format('HH:mm')
   );
-  const [actualStartTime, setActualStartTime] = useState(
+  const [actualStartTime, setActualStartTime] = useState<string>(
     order.actualStartTime ? dayjs(order.actualStartTime).format('HH:mm') : dayjs().format('HH:mm')
   );
-  const [actualEndTime, setActualEndTime] = useState(
+  const [actualEndTime, setActualEndTime] = useState<string>(
     order.actualEndTime ? dayjs(order.actualEndTime).format('HH:mm') : dayjs().add(1, 'hour').format('HH:mm')
   );
   const [selectedRemarks, setSelectedRemarks] = useState<ServiceRemark[]>(order.serviceRemarks || []);
-  const [serviceNote, setServiceNote] = useState(order.serviceNote || '');
+  const [serviceNote, setServiceNote] = useState<string>(order.serviceNote || '');
+  const [quoteErrors, setQuoteErrors] = useState<{ [key: string]: string }>({});
+  const [completeErrors, setCompleteErrors] = useState<{ [key: string]: string }>({});
 
   const handleVehicleChange = (type: VehicleType) => {
     setVehicleType(type);
@@ -81,7 +81,65 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
     }
   };
 
+  const validateQuoteForm = (): boolean => {
+    const errors: { [key: string]: string } = {};
+
+    if (!vehicleType) {
+      errors.vehicleType = '请选择车型';
+    }
+
+    if (!capacity || capacity <= 0) {
+      errors.capacity = '可乘人数必须大于0';
+    } else if (!Number.isInteger(capacity)) {
+      errors.capacity = '可乘人数必须是整数';
+    } else if (capacity > 50) {
+      errors.capacity = '可乘人数不能超过50';
+    }
+
+    if (price === undefined || price === null || isNaN(price)) {
+      errors.price = '请输入报价金额';
+    } else if (price <= 0) {
+      errors.price = '报价必须大于0';
+    } else if (price > 10000) {
+      errors.price = '报价不能超过10000元';
+    }
+
+    if (!arrivalTime) {
+      errors.arrivalTime = '请选择到达时间';
+    }
+
+    setQuoteErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateCompleteForm = (): boolean => {
+    const errors: { [key: string]: string } = {};
+
+    if (!actualStartTime) {
+      errors.actualStartTime = '请选择实际出发时间';
+    }
+
+    if (!actualEndTime) {
+      errors.actualEndTime = '请选择实际结束时间';
+    }
+
+    if (actualStartTime && actualEndTime) {
+      const start = dayjs(`2024-01-01 ${actualStartTime}`);
+      const end = dayjs(`2024-01-01 ${actualEndTime}`);
+      if (end.isBefore(start)) {
+        errors.actualEndTime = '结束时间不能早于出发时间';
+      }
+    }
+
+    setCompleteErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleQuote = () => {
+    if (!validateQuoteForm()) {
+      return;
+    }
+
     const arrivalDateTime = dayjs(order.expectedEndTime)
       .hour(parseInt(arrivalTime.split(':')[0]))
       .minute(parseInt(arrivalTime.split(':')[1]))
@@ -89,14 +147,18 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
     
     onQuote(order.id, {
       vehicleType,
-      capacity,
-      price,
+      capacity: Math.floor(capacity),
+      price: Math.floor(price),
       arrivalTime: arrivalDateTime,
     });
     setShowQuoteForm(false);
   };
 
   const handleComplete = () => {
+    if (!validateCompleteForm()) {
+      return;
+    }
+
     const date = dayjs(order.expectedEndTime).format('YYYY-MM-DD');
     const startDateTime = `${date} ${actualStartTime}`;
     const endDateTime = `${date} ${actualEndTime}`;
@@ -117,6 +179,8 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
         : [...prev, remark]
     );
   };
+
+  const isCompleted = order.status === 'completed';
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -271,29 +335,56 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
                     </p>
                   </div>
                 </div>
+                <div className="mt-3 pt-3 border-t border-green-200">
+                  <p className="text-xs text-gray-500">
+                    报价时间：{dayjs(order.myQuote.quotedAt).format('MM-DD HH:mm')}
+                  </p>
+                </div>
               </div>
             )}
 
-            {order.status === 'completed' && order.serviceRemarks && (
-              <div className="bg-gray-50 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-gray-700 font-medium mb-3">
-                  <Star size={16} />
-                  服务备注
+            {isCompleted && (
+              <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
+                <div className="flex items-center gap-2 text-emerald-700 font-medium mb-3">
+                  <Calendar size={16} />
+                  服务完成记录
                 </div>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {order.serviceRemarks.map(remark => (
-                    <span
-                      key={remark}
-                      className="px-2 py-1 bg-white text-gray-700 text-xs rounded-lg border border-gray-200"
-                    >
-                      {remark}
-                    </span>
-                  ))}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <p className="text-xs text-gray-500">实际出发</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {order.actualStartTime ? dayjs(order.actualStartTime).format('HH:mm') : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">实际结束</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {order.actualEndTime ? dayjs(order.actualEndTime).format('HH:mm') : '-'}
+                    </p>
+                  </div>
                 </div>
+                {order.serviceRemarks && order.serviceRemarks.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs text-gray-500 mb-2">服务标签</p>
+                    <div className="flex flex-wrap gap-2">
+                      {order.serviceRemarks.map(remark => (
+                        <span
+                          key={remark}
+                          className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-lg font-medium"
+                        >
+                          {remark}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {order.serviceNote && (
-                  <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">
-                    {order.serviceNote}
-                  </p>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-2">服务备注</p>
+                    <p className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-emerald-200">
+                      {order.serviceNote}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -336,9 +427,25 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
               <input
                 type="number"
                 value={capacity}
-                onChange={(e) => setCapacity(parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setCapacity(isNaN(val) ? 0 : val);
+                  if (quoteErrors.capacity) {
+                    setQuoteErrors(prev => ({ ...prev, capacity: '' }));
+                  }
+                }}
+                min={1}
+                max={50}
+                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  quoteErrors.capacity ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+                }`}
               />
+              {quoteErrors.capacity && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle size={12} />
+                  {quoteErrors.capacity}
+                </p>
+              )}
             </div>
 
             <div>
@@ -348,10 +455,26 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
                 <input
                   type="number"
                   value={price}
-                  onChange={(e) => setPrice(parseInt(e.target.value))}
-                  className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setPrice(isNaN(val) ? 0 : val);
+                    if (quoteErrors.price) {
+                      setQuoteErrors(prev => ({ ...prev, price: '' }));
+                    }
+                  }}
+                  min={1}
+                  max={10000}
+                  className={`w-full pl-7 pr-3 py-2 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    quoteErrors.price ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+                  }`}
                 />
               </div>
+              {quoteErrors.price && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle size={12} />
+                  {quoteErrors.price}
+                </p>
+              )}
             </div>
 
             <div>
@@ -359,14 +482,30 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
               <input
                 type="time"
                 value={arrivalTime}
-                onChange={(e) => setArrivalTime(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                onChange={(e) => {
+                  setArrivalTime(e.target.value);
+                  if (quoteErrors.arrivalTime) {
+                    setQuoteErrors(prev => ({ ...prev, arrivalTime: '' }));
+                  }
+                }}
+                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  quoteErrors.arrivalTime ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+                }`}
               />
+              {quoteErrors.arrivalTime && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle size={12} />
+                  {quoteErrors.arrivalTime}
+                </p>
+              )}
             </div>
 
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => setShowQuoteForm(false)}
+                onClick={() => {
+                  setShowQuoteForm(false);
+                  setQuoteErrors({});
+                }}
                 className="flex-1 py-2.5 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
               >
                 取消
@@ -381,7 +520,7 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
           </div>
         )}
 
-        {(order.status === 'in_progress') && !showCompleteForm && (
+        {(order.status === 'in_progress' || order.status === 'accepted') && !showCompleteForm && (
           <div className="p-4 border-t border-gray-200 bg-white">
             <button
               onClick={() => setShowCompleteForm(true)}
@@ -392,7 +531,7 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
           </div>
         )}
 
-        {order.status === 'in_progress' && showCompleteForm && (
+        {(order.status === 'in_progress' || order.status === 'accepted') && showCompleteForm && (
           <div className="p-4 border-t border-gray-200 bg-gray-50 space-y-3">
             <h3 className="font-semibold text-gray-900 flex items-center gap-2">
               <Calendar size={18} className="text-green-600" />
@@ -405,18 +544,44 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
                 <input
                   type="time"
                   value={actualStartTime}
-                  onChange={(e) => setActualStartTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  onChange={(e) => {
+                    setActualStartTime(e.target.value);
+                    if (completeErrors.actualStartTime) {
+                      setCompleteErrors(prev => ({ ...prev, actualStartTime: '' }));
+                    }
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                    completeErrors.actualStartTime ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {completeErrors.actualStartTime && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {completeErrors.actualStartTime}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-sm text-gray-600 block mb-1.5">实际结束</label>
                 <input
                   type="time"
                   value={actualEndTime}
-                  onChange={(e) => setActualEndTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  onChange={(e) => {
+                    setActualEndTime(e.target.value);
+                    if (completeErrors.actualEndTime) {
+                      setCompleteErrors(prev => ({ ...prev, actualEndTime: '' }));
+                    }
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                    completeErrors.actualEndTime ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {completeErrors.actualEndTime && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {completeErrors.actualEndTime}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -426,6 +591,7 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
                 {remarkOptions.map(remark => (
                   <button
                     key={remark}
+                    type="button"
                     onClick={() => toggleRemark(remark)}
                     className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                       selectedRemarks.includes(remark)
@@ -452,7 +618,10 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
 
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => setShowCompleteForm(false)}
+                onClick={() => {
+                  setShowCompleteForm(false);
+                  setCompleteErrors({});
+                }}
                 className="flex-1 py-2.5 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
               >
                 取消
@@ -475,18 +644,10 @@ export default function OrderDetail({ order, onClose, onQuote, onComplete }: Ord
           </div>
         )}
 
-        {order.status === 'accepted' && (
-          <div className="p-4 border-t border-gray-200 bg-green-50">
-            <p className="text-center text-sm text-green-700 font-medium">
-              ✓ 门店已确认接单，请按时到达
-            </p>
-          </div>
-        )}
-
         {order.status === 'completed' && (
-          <div className="p-4 border-t border-gray-200 bg-gray-50">
-            <p className="text-center text-sm text-gray-600">
-              服务已完成
+          <div className="p-4 border-t border-gray-200 bg-emerald-50">
+            <p className="text-center text-sm text-emerald-700 font-medium">
+              ✓ 服务已完成
             </p>
           </div>
         )}
