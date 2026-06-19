@@ -4,6 +4,8 @@ const path = require('path');
 const isDev = process.env.NODE_ENV === 'development';
 
 let mainWindow;
+let retryCount = 0;
+const MAX_RETRY = 10;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -13,6 +15,7 @@ function createWindow() {
     minHeight: 640,
     title: '剧本杀司机接单台',
     icon: path.join(__dirname, '../public/icon.png'),
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -23,15 +26,39 @@ function createWindow() {
 
   Menu.setApplicationMenu(null);
 
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5175');
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    if (isDev && retryCount < MAX_RETRY) {
+      retryCount++;
+      console.log(`[Electron] 页面加载失败 (${errorDescription})，正在重试 (${retryCount}/${MAX_RETRY})...`);
+      setTimeout(() => {
+        mainWindow.loadURL('http://localhost:5175');
+      }, 1500);
+    }
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    retryCount = 0;
+  });
+
+  loadApp();
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+}
+
+function loadApp() {
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5175');
+  } else {
+    const distPath = path.join(__dirname, '../dist/index.html');
+    mainWindow.loadFile(distPath);
+  }
 }
 
 app.whenReady().then(() => {
