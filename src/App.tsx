@@ -8,6 +8,7 @@ import { mockOrders, mockDriver } from './data/mockData';
 import {
   loadOrders,
   saveOrders,
+  clearOrders,
 } from './utils/storage';
 import type { Order, FilterType, DayTab, VehicleType, ServiceRemark } from './types';
 import './App.css';
@@ -16,7 +17,7 @@ function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeDay, setActiveDay] = useState<DayTab>('today');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -35,6 +36,11 @@ function App() {
       saveOrders(orders);
     }
   }, [orders, isLoaded]);
+
+  const selectedOrder = useMemo(() => {
+    if (!selectedOrderId) return null;
+    return orders.find(o => o.id === selectedOrderId) || null;
+  }, [selectedOrderId, orders]);
 
   const filteredOrders = useMemo(() => {
     let result = orders.filter(order => {
@@ -105,24 +111,6 @@ function App() {
     );
     
     setOrders(updatedOrders);
-    
-    setSelectedOrder(prev =>
-      prev && prev.id === orderId
-        ? {
-            ...prev,
-            status: 'quoted' as const,
-            myQuote: {
-              driverId: mockDriver.id,
-              driverName: mockDriver.name,
-              vehicleType: data.vehicleType,
-              capacity: data.capacity,
-              price: data.price,
-              arrivalTime: data.arrivalTime,
-              quotedAt: dayjs().format('YYYY-MM-DD HH:mm'),
-            },
-          }
-        : prev
-    );
   };
 
   const handleComplete = (
@@ -148,19 +136,13 @@ function App() {
     );
     
     setOrders(updatedOrders);
-    
-    setSelectedOrder(prev =>
-      prev && prev.id === orderId
-        ? {
-            ...prev,
-            status: 'completed' as const,
-            actualStartTime: data.actualStartTime,
-            actualEndTime: data.actualEndTime,
-            serviceRemarks: data.remarks,
-            serviceNote: data.note,
-          }
-        : prev
-    );
+  };
+
+  const handleResetData = () => {
+    clearOrders();
+    setOrders(mockOrders);
+    saveOrders(mockOrders);
+    setSelectedOrderId(null);
   };
 
   const stats = useMemo(() => {
@@ -194,51 +176,60 @@ function App() {
       />
 
       <div className="max-w-7xl mx-auto px-6 py-4">
-        <div className="grid grid-cols-4 gap-4 mb-4">
-          <div className="bg-white rounded-xl p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                <Package size={20} className="text-amber-600" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="grid grid-cols-4 gap-4 flex-1 mr-4">
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                  <Package size={20} className="text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                  <p className="text-xs text-gray-500">今日总单量</p>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                <p className="text-xs text-gray-500">今日总单量</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Clock size={20} className="text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
+                  <p className="text-xs text-gray-500">待报价</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <CheckCircle size={20} className="text-green-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
+                  <p className="text-xs text-gray-500">已完成</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                  <DollarSign size={20} className="text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-amber-600">¥{stats.totalBudget}</p>
+                  <p className="text-xs text-gray-500">今日预算总额</p>
+                </div>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Clock size={20} className="text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
-                <p className="text-xs text-gray-500">待报价</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <CheckCircle size={20} className="text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
-                <p className="text-xs text-gray-500">已完成</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                <DollarSign size={20} className="text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-amber-600">¥{stats.totalBudget}</p>
-                <p className="text-xs text-gray-500">今日预算总额</p>
-              </div>
-            </div>
-          </div>
+          <button
+            onClick={handleResetData}
+            className="px-3 py-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="重置为初始数据"
+          >
+            重置数据
+          </button>
         </div>
 
         {filteredOrders.length > 0 ? (
@@ -247,7 +238,7 @@ function App() {
               <OrderCard
                 key={order.id}
                 order={order}
-                onClick={() => setSelectedOrder(order)}
+                onClick={() => setSelectedOrderId(order.id)}
               />
             ))}
           </div>
@@ -265,7 +256,7 @@ function App() {
       {selectedOrder && (
         <OrderDetail
           order={selectedOrder}
-          onClose={() => setSelectedOrder(null)}
+          onClose={() => setSelectedOrderId(null)}
           onQuote={handleQuote}
           onComplete={handleComplete}
         />

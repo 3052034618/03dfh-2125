@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import type { Order, Store, Driver, ScriptGenre } from '../types';
+import type { Order, Store, Driver, ScriptGenre, VehicleType } from '../types';
 
 const stores: Store[] = [
   {
@@ -72,6 +72,17 @@ const driver: Driver = {
   capacity: 7,
   plateNumber: '沪A·88888',
 };
+
+const vehiclePool: { type: VehicleType; capacity: number }[] = [
+  { type: '经济型轿车', capacity: 4 },
+  { type: '舒适型轿车', capacity: 4 },
+  { type: 'SUV', capacity: 5 },
+  { type: '商务车', capacity: 6 },
+  { type: '7座MPV', capacity: 7 },
+  { type: '9座商务', capacity: 9 },
+  { type: '14座中巴', capacity: 14 },
+  { type: '17座中巴', capacity: 17 },
+];
 
 const scriptNames: Record<ScriptGenre, string[]> = {
   '推理本': ['迷雾山庄', '死亡循环', '无名之町'],
@@ -149,11 +160,43 @@ function generateOrders(): Order[] {
   ];
   
   todayTimes.forEach((time, index) => {
-    orders.push(generateOrder(`order-today-${index}`, 0, time[0], time[1], index % stores.length));
+    const order = generateOrder(`order-today-${index}`, 0, time[0], time[1], index % stores.length);
+    if (order.status === 'quoted') {
+      const price = Math.floor(order.budget * (0.9 + Math.random() * 0.2));
+      const vehicleIdx = Math.floor(Math.random() * vehiclePool.length);
+      const vehicle = vehiclePool[vehicleIdx];
+      const arrivalOffset = Math.floor(Math.random() * 30);
+      order.myQuote = {
+        driverId: driver.id,
+        driverName: driver.name,
+        vehicleType: vehicle.type,
+        capacity: vehicle.capacity,
+        price: price,
+        arrivalTime: dayjs(order.expectedEndTime).subtract(10 + arrivalOffset, 'minute').format('YYYY-MM-DD HH:mm'),
+        quotedAt: dayjs().subtract(1 + Math.floor(Math.random() * 12), 'hour').format('YYYY-MM-DD HH:mm'),
+      };
+    }
+    orders.push(order);
   });
   
   tomorrowTimes.forEach((time, index) => {
-    orders.push(generateOrder(`order-tomorrow-${index}`, 1, time[0], time[1], index % stores.length));
+    const order = generateOrder(`order-tomorrow-${index}`, 1, time[0], time[1], index % stores.length);
+    if (order.status === 'quoted') {
+      const price = Math.floor(order.budget * (0.9 + Math.random() * 0.2));
+      const vehicleIdx = Math.floor(Math.random() * vehiclePool.length);
+      const vehicle = vehiclePool[vehicleIdx];
+      const arrivalOffset = Math.floor(Math.random() * 30);
+      order.myQuote = {
+        driverId: driver.id,
+        driverName: driver.name,
+        vehicleType: vehicle.type,
+        capacity: vehicle.capacity,
+        price: price,
+        arrivalTime: dayjs(order.expectedEndTime).subtract(10 + arrivalOffset, 'minute').format('YYYY-MM-DD HH:mm'),
+        quotedAt: dayjs().subtract(1 + Math.floor(Math.random() * 12), 'hour').format('YYYY-MM-DD HH:mm'),
+      };
+    }
+    orders.push(order);
   });
   
   orders[1].status = 'accepted';
